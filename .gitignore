@@ -1,6 +1,10 @@
 # Datasets (each person generates them with: python data.py)
 data/
 
+# Notes and theory
+notes/
+theory/
+
 # Model checkpoints, vector indexes and large outputs
 checkpoints/
 *.pt
