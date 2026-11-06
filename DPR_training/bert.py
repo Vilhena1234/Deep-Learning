@@ -17,14 +17,19 @@ corpus[passage ID]   passage text
 qrels[question ID]    relevant passage IDs and scores
 """
 #data gathering
-def data_loader():
+def load_ds():
     project_folder = Path(__file__).resolve().parent.parent
     dataset_path = project_folder/"data"/"processed"/"squad_train.json"
-
+    
     with dataset_path.open(encoding="utf-8") as file:
         dataset = json.load(file)
     #question ids
-    question_ids = list(dataset["qrels"])[:20]
+    
+    return dataset,question_ids
+
+
+
+def create_batch(dataset,question_ids):
     #question text gathering
     questions =[
         dataset["queries"][question_id]
@@ -49,7 +54,7 @@ def data_loader():
         for passage_id in passage_ids
     ]
     
-    return questions, passages, passage_ids, question_ids, dataset["qrels"]
+    return questions, passages, passage_ids
     #data gathering end
 #encoder
 def encoder(texts, tokenizer, model):
@@ -146,9 +151,11 @@ def train_step(questions,passages,targets,tokenizer,model,optimizer):
 
     optimizer.step()
     #evaluate
-
 def main():
-    questions, passages, passage_ids, question_ids, qrels = data_loader()
+    dataset =load_ds()
+    question_ids = list(dataset["qrels"])[:20]
+    questions, passages, passage_ids = create_batch(dataset,question_ids)
+
     """
     print("questions:", len(questions))
     print("passages:",len(passages))
@@ -168,7 +175,7 @@ def main():
     targets = build_targets(
         question_ids,
         passage_ids,
-        qrels,
+        dataset["qrels"],
         device=next(model.parameters()).device,
     )
     b4_loss, b4_correct = eval(
