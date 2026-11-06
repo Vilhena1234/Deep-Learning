@@ -71,34 +71,14 @@ def encoder(texts, tokenizer, model):
 
 
     return text_vectors
-def main():
-    questions, passages, passage_ids, question_ids, qrels = data_loader()
-    print("questions:", len(questions))
-    print("passages:",len(passages))
-
-
-    model_id = "answerdotai/ModernBERT-large"
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    model = AutoModel.from_pretrained(model_id)
-    model.eval()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
-    optimizer.zero_grad()
-
-    #encoding
-    question_vectors = encoder(questions,tokenizer,model)
-    passage_vectors = encoder(passages,tokenizer,model)
-    print("Question vectors:", question_vectors.shape)
-    print("Passage vectors:", passage_vectors.shape)
-
-    #compare questions & passages (vectors)
-    #questions as rows and scores of each passsage to the question as columns
-    scores = question_vectors @ passage_vectors.T
-    correct = 0
-    #connecting passage ID to the score columns p_to_col["train_d2"] ->2
+#tell loss f which pass col is correct for each question
+def build_targets(question_ids, passage_ids, qrels, device):
     p_to_col = {
-        passage_id: column
-        for column, passage_id in enumerate(passage_ids)
-    }
+            passage_id: column
+            for column, passage_id in enumerate(passage_ids)
+        }
+    #connecting passage ID to the score columns p_to_col["train_d2"] ->2
+        
     target_cols =[]
     for question_id in question_ids:
         pos_p_ids = [
@@ -114,19 +94,42 @@ def main():
         target_cols.append(correct_col)
 
     targets = torch.tensor(
-        target_cols,
-        dtype=torch.long,
-        device=scores.device,
-
-    )
-    loss = F.cross_entropy(scores,targets)
+            target_cols,
+            dtype=torch.long,
+            device=device,
     
-    #check needed for infinite and NaN
+        )
+    return targets
+#how well the model at the time retrives the correct passage
+def eval(questions, passages, targets, tokenizer, model):
+    was_training = model.training
+    model.eval()
+    #TRAINING 1 STEP
+    #compare questions & passages (vectors)
+    #questions as rows and scores of each passsage to the question as columns
+    with torch.no_grad():
+        question_vecs = encoder(questions, tokenizer,model)
+        pass_vecs = encoder(passages,tokenizer,model)
+        scores = question_vecs @ pass_vecs.T
+        loss = F.cross_entropy(scores,targets)
+        pred_cols = scores.argmax(dim=1)
+        correct = (pred_cols == targets).sum().item()
+
+    model.train(was_training)
+    return loss.item(), correct
+def train_step(questions,passages,targets,tokenizer,model,optimizer):
+    model.train()
+    optimizer.zero_grad()
+    q_vecs = encoder(questions,tokenizer,model)
+    pass_vecs = encoder(passages,tokenizer,model)
+    scores = q_vecs @ pass_vecs.T
+    loss = F.cross_entropy(scores,targets)
+
     if not torch.isfinite(loss).item():
-        raise RuntimeError("Loss is nan or infinite")
+            raise RuntimeError("Loss is nan or infinite")
+
     loss.backward()
     #Gradient check b4 update weights
-
     checked_params = 0
     for name, par in model.named_parameters():
         if par.grad is None:
@@ -141,15 +144,64 @@ def main():
     print("all grad are good. params checked:", checked_params)
 
 
-    before = par.detach().clone()
     optimizer.step()
-    after = par.detach()
-    max_change = (after-before).abs().max().item()
     #evaluate
 
+def main():
+    questions, passages, passage_ids, question_ids, qrels = data_loader()
+    """
+    print("questions:", len(questions))
+    print("passages:",len(passages))
+    """
+    save_dir = (
+            Path(__file__).resolve().parent.parent
+            /"DPR_training"
+            /"checkpoints"
+            /"modernbert_squad_5step"
+        )
+    model_id = "answerdotai/ModernBERT-large"
+    tokenizer = AutoTokenizer.from_pretrained(save_dir)
+    model = AutoModel.from_pretrained(save_dir)
+    model.eval()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
+
+    targets = build_targets(
+        question_ids,
+        passage_ids,
+        qrels,
+        device=next(model.parameters()).device,
+    )
+    b4_loss, b4_correct = eval(
+        questions, passages, targets, tokenizer, model
+    )
+    
+    step_num = 5
+    total = len(questions)
+    for step in range(1, step_num+1):
+        train_step(
+            questions,passages,targets,tokenizer,model,optimizer
+        )
+        after_loss, after_correct = eval(
+            questions, passages, targets, tokenizer, model
+        )
+        print(
+            f"Step {step}: loss={after_loss:.4f}, "
+            f"correct={after_correct}/{total}"
+        )
+        
+    print("Total loss decrease:", b4_loss - after_loss)
+    print("Additional correct:", after_correct - b4_correct)
+    
+    model.save_pretrained(save_dir)
+    tokenizer.save_pretrained(save_dir)
+    print("Model saved:", save_dir)
+    """
+    print("Question vectors:", question_vectors.shape)
+    print("Passage vectors:", passage_vectors.shape)"""
+"""
     print("params inspected:", name)
     print("par changed:",not torch.equal(before,after))
-    print("largest change:", max_change )
+    print("largest change:", max_change )"""
 """
     print("Passage columns:", p_to_col)
     print("Targets:", targets.tolist())
@@ -172,7 +224,7 @@ def main():
         print("Correct:", is_correct)
         print()
 """
-
-"""print(f"Correct at rank 1: {correct}/{len(question_ids)}")"""
+"""
+print(f"Correct at rank 1: {correct}/{len(question_ids)}")"""
 if __name__== "__main__":
     main()
