@@ -1,0 +1,14 @@
+defaults:
+  - _self_  # Hydra magic
+  - dataset: fiqa
+  - retriever: tf_idf
+
+
+device: cpu
+base_path: "."
+top_k: 10
+
+# Keep Hydra in the current directory to ensure relative paths are correct
+hydra:
+  run:
+    dir: "outputs/tf_idf/"  # Separate directory for evaluation outputs
