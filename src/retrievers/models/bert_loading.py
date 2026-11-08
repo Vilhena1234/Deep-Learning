@@ -1,21 +1,4 @@
-"""
-Load pretrained BERT weights into our own TransformerEncoder (Person 3 — Gonçalo).
 
-Why: if our encoder, with BERT's weights copied in, gives the same output as
-HuggingFace's BERT, our implementation of every component is correct on a real
-model, not only on random test numbers.
-
-How: BERT's weights are stored under names like
-    encoder.layer.3.attention.self.query.weight
-We copy each one into the matching part of our model:
-    layers[3].self_attn.linears[0].weight
-
-Usage:
-    from bert_loading import load_bert
-    encoder, tokenizer = load_bert("bert-base-uncased")
-    batch = tokenizer(["what is a dividend?"], return_tensors="pt", padding=True)
-    h = encoder(batch["input_ids"], batch["attention_mask"])     # (B, T, 768)
-"""
 
 import torch
 
@@ -23,7 +6,7 @@ from src.retrievers.models.transformer import TransformerEncoder
 
 
 def encoder_from_bert_config(config) -> TransformerEncoder:
-    """Build our encoder with the same sizes as a HuggingFace BertConfig."""
+
     assert config.hidden_act == "gelu", "our feed-forward supports exact GELU (as in BERT)"
     model = TransformerEncoder(
         vocab_size=config.vocab_size,
@@ -45,10 +28,7 @@ def encoder_from_bert_config(config) -> TransformerEncoder:
 
 @torch.no_grad()
 def copy_bert_weights(ours: TransformerEncoder, bert_state: dict) -> None:
-    """
-    Copy every weight from a HuggingFace BertModel state_dict into our encoder.
-    Raises an error if a shape does not match, so mistakes cannot go unnoticed.
-    """
+    
 
     def put(target: torch.Tensor, name: str, value=None):
         value = bert_state[name] if value is None else value
@@ -93,10 +73,7 @@ def copy_bert_weights(ours: TransformerEncoder, bert_state: dict) -> None:
 
 
 def load_bert_encoder(model_name: str = "bert-base-uncased", pooling_type: str = "cls"):
-    """
-    Same as load_bert, but returns the course's TransformerEncoder (encoder.py), which
-    pools to one vector per text. Returns (encoder, tokenizer).
-    """
+  
     from transformers import AutoTokenizer, BertModel
     from src.retrievers.models.encoder import TransformerEncoder as CourseEncoder
 
@@ -115,7 +92,7 @@ def load_bert_encoder(model_name: str = "bert-base-uncased", pooling_type: str =
 
 
 def load_bert(model_name: str = "bert-base-uncased"):
-    """Download BERT from HuggingFace and return (our encoder with its weights, tokenizer)."""
+
     from transformers import AutoTokenizer, BertModel
 
     bert = BertModel.from_pretrained(model_name, add_pooling_layer=False)
