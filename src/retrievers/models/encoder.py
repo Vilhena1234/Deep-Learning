@@ -13,7 +13,7 @@ class TransformerEncoder(nn.Module):
                  vocab_size: int = 30522, pooling_type: str = 'cls', dropout: float = 0.1,
                  max_len: int = 512, positions: str = 'learned'):
      
-        super().__init__()   # CHANGE: was missing; nn.Module must be initialised first
+        super().__init__()  
         self.n_layers = n_layers
         self.n_heads = n_heads
         self.emb_dim =    emb_dim
