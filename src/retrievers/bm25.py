@@ -22,7 +22,7 @@ from src.retrievers.tf_idf import TFIDF
 
 
 class BM25(TFIDF):
-    def __init__(self, documents: list[dict] = None, index_path: str = None, k1: float = 1.5, b: float = 0.75,
+    def __init__(self, documents: list[dict] = None, index_path: str = None, k1: float = 1.2, b: float = 0.75,
                  remove_stopwords: bool = False, stem: bool = False) -> None:
         super(BM25, self).__init__(documents, index_path, remove_stopwords=remove_stopwords, stem=stem)
         self.document_lengths, self.average_document_length = self.GetDocumentLengths()
@@ -66,16 +66,3 @@ class BM25(TFIDF):
 
     def _ScoreMatrix(self):
         return self.bm25_matrix
-
-    def CalculateScores(self, queries: list[str]):
-        """Calculate scores for a query
-
-        Args:
-            query (str): The query to calculate scores for
-
-        Returns:
-            np.array: An array of scores for each document
-        """
-        query_vector = self.QueryToVector(queries)
-        scores = query_vector.dot(self.bm25_matrix.T).toarray()
-        return scores

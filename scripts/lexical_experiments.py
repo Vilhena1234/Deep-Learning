@@ -1,7 +1,7 @@
 """
 Lexical baseline experiments (Person 2 - Soni). Produces the tables and the plot in results/lexical/.
 
-Run from the repo root, after `python data.py`:
+Run from the repo root (the data is downloaded by the starter's Corpus the first time):
     python scripts/lexical_experiments.py --dataset squad
     python scripts/lexical_experiments.py --dataset fiqa
 
@@ -11,9 +11,9 @@ What it runs (plan section 7, owner 2):
        on the REPORT split
     3. Preprocessing ablation: stopwords / stemming on and off           -> preprocessing_<dataset>.csv
 
-Splits (never tune on the numbers we report):
-    FiQA : tune on dev, report on test      (corpus = all 57,638 passages)
-    SQuAD: tune on 2,000 train questions (train corpus), report on dev (2,067 dev paragraphs)
+Splits (never tune on the numbers we report), corpus = Corpus.all_documents as in main.py:
+    FiQA : tune on validation, report on test
+    SQuAD: tune on 2,000 train questions, report on validation (SQuAD has no test split)
 
 The metrics below are a small local copy so this script runs on its own.
 Once src/evaluation/metrics.py (Person 1) has Precision@k, Recall@k and MRR, switch to that.
@@ -28,6 +28,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root
+from src.data_utils.corpus import Corpus  # noqa: E402
 from src.retrievers.bm25 import BM25  # noqa: E402
 from src.retrievers.tf_idf import TFIDF  # noqa: E402
 
@@ -39,11 +40,16 @@ DEFAULT = dict(k1=1.2, b=0.75)
 
 
 def load_split(name: str, split: str, max_queries: int | None = None, seed: int = 0):
-    """Reads data/processed/<name>_<split>.json written by data.py (same as data.load, full corpus)."""
-    path = os.path.join('data', 'processed', f'{name}_{split}.json')
-    with open(path, encoding='utf-8') as f:
-        d = json.load(f)
-    corpus, queries, qrels = d['corpus'], d['queries'], d['qrels']
+    """
+    Loads one split with the starter's Corpus (same folder and corpus as main.py).
+    Returns corpus {doc_id: text}, queries {query_id: question}, qrels {query_id: {doc_id: 1}}.
+    """
+    data = Corpus(dataset_name=name, base_dir='./retrieval_data')
+    documents = data.all_documents[0]                       # one row holding every document
+    corpus = dict(zip(documents['document_id'], documents['text']))
+    rows = {'train': data.train, 'dev': data.val, 'test': data.test}[split]
+    queries = dict(zip(rows['query_id'], rows['question']))
+    qrels = {qid: {doc_id: 1 for doc_id in data.relevant_ids[qid]} for qid in queries}
     if max_queries is not None and len(queries) > max_queries:
         qids = random.Random(seed).sample(sorted(queries), max_queries)
         queries = {q: queries[q] for q in qids}
