@@ -38,9 +38,6 @@ class MultiHeadedAttention(nn.Module):
     def forward(self, query, key, value, mask=None):
         nbatches = query.size(0)
         if mask is not None:
-            # CHANGE: accept a (B, T) padding mask and reshape it to (B, 1, 1, T)
-            # so the same mask is applied to all h heads and all query positions.
-            # (The notebook expects a (B, 1, T) mask and does mask.unsqueeze(1).)
             if mask.dim() == 2:
                 mask = mask[:, None, None, :]
             else:
@@ -64,7 +61,6 @@ class LayerNorm(nn.Module):
     
 
     def __init__(self, d_model, eps=1e-12):
-        # eps = 1e-12 is the value BERT uses (PyTorch's default is 1e-5)
         super().__init__()
         self.gamma = nn.Parameter(torch.ones(d_model))
         self.beta = nn.Parameter(torch.zeros(d_model))
@@ -108,7 +104,6 @@ class PositionalEncoding(nn.Module):
 
     def __init__(self, d_model, max_len=5000):
         super().__init__()
-        # Compute the positional encodings once in log space.
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2) * -(math.log(10000.0) / d_model))
@@ -141,7 +136,7 @@ class Embeddings(nn.Module):
             self.pos = PositionalEncoding(d_model, max_len)
         elif positions == "learned":
             self.pos = LearnedPositionalEmbedding(d_model, max_len)
-        else:  # "none": used to show that attention alone ignores word order
+        else:  
             self.pos = None
         self.norm = LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
