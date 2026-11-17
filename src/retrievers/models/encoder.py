@@ -33,7 +33,7 @@ class TransformerEncoder(nn.Module):
             f"n_heads * hidden_dim; got {self.emb_dim} != {self.n_heads} * {self.hidden_dim}")
         assert self.pooling_type in ('cls', 'mean', 'max'), f"unknown pooling_type {self.pooling_type}"
 
-        # Embeddings (+ positions) -> n_layers x [attention -> Add & Norm -> FFN -> Add & Norm]
+
         self.model = EncoderStack(
             vocab_size=self.vocab_size,
             d_model=self.emb_dim,
@@ -70,7 +70,6 @@ class TransformerEncoder(nn.Module):
 
     @classmethod
     def from_config(cls, model_cfg, vocab_size: int = 30522):
-        """Build from config/model/encoder.yaml, e.g. TransformerEncoder.from_config(cfg.model)."""
         return cls(n_layers=model_cfg.n_layers, n_heads=model_cfg.n_heads, emb_dim=model_cfg.emb_dim,
                    hidden_dim=model_cfg.hidden_dim, feed_forward_dim=model_cfg.feed_forward_dim,
                    vocab_size=vocab_size, pooling_type=model_cfg.pooling_type)

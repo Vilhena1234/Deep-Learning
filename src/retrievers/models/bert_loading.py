@@ -35,22 +35,16 @@ def copy_bert_weights(ours: TransformerEncoder, bert_state: dict) -> None:
         assert target.shape == value.shape, f"{name}: ours {tuple(target.shape)} vs BERT {tuple(value.shape)}"
         target.copy_(value)
 
-    # ---- Embeddings ------------------------------------------------------- #
     e = ours.embeddings
     put(e.tok.weight, "embeddings.word_embeddings.weight")
 
-    # BERT adds a third vector to each token: the "token type" (sentence A or B).
-    # We always encode one text at a time, so the type is always 0. Adding the
-    # same type-0 vector to every token is the same as adding it to every
-    # position vector, so we fold it in here instead of adding a new layer.
+
     pos = bert_state["embeddings.position_embeddings.weight"]
     type0 = bert_state["embeddings.token_type_embeddings.weight"][0]
     put(e.pos.pe.weight, "embeddings.position_embeddings.weight", pos + type0)
 
     put(e.norm.gamma, "embeddings.LayerNorm.weight")
     put(e.norm.beta, "embeddings.LayerNorm.bias")
-
-    # ---- Encoder layers ---------------------------------------------------- #
     for i, layer in enumerate(ours.layers):
         p = f"encoder.layer.{i}."
         attn = layer.self_attn.linears
