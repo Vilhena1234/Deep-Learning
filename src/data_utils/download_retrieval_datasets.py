@@ -1,6 +1,10 @@
 import os
-os.environ["HF_HUB_OFFLINE"] = "1"
-os.environ["HF_DATASETS_OFFLINE"] = "1"
+# CHANGE: the two lines below forced HuggingFace into offline mode, so on a new
+# computer the datasets could never be downloaded. Offline mode is now only used
+# if you switch it on yourself (e.g. on the HPC after the data is cached):
+#   set HF_DATASETS_OFFLINE=1   (Windows)   /   export HF_DATASETS_OFFLINE=1   (Linux/HPC)
+# os.environ["HF_HUB_OFFLINE"] = "1"
+# os.environ["HF_DATASETS_OFFLINE"] = "1"
 from datasets import load_dataset
 
 def get_fiqa_dataset(base_dir: str):

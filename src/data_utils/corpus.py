@@ -43,7 +43,7 @@ class Corpus:
     def all_documents(self):
         train_text, train_ids = list(self.train['text']), list(self.train['document_id'])
         val_text, val_ids =     list(self.val['text']), list(self.val['document_id'])
-        
+
         all_text = train_text + val_text
         all_ids = train_ids   + val_ids
 
@@ -52,8 +52,15 @@ class Corpus:
             all_text += test_text
             all_ids  += test_ids
 
-        return Dataset.from_dict({'text': all_text,
-                                  'document_id': all_ids})
+        # CHANGE: the same document can now be relevant to several queries (it keeps
+        # one id, see __assign_ids), so keep each document only once in the corpus.
+        unique = {}
+        for texts, ids in zip(all_text, all_ids):
+            for text, _id in zip(texts, ids):
+                unique.setdefault(_id, text)
+
+        return Dataset.from_dict({'text': [list(unique.values())],
+                                  'document_id': [list(unique.keys())]})
 
 
     def __load_data(self, base_dir) -> dict[Dataset]:
@@ -74,23 +81,36 @@ class Corpus:
         
         for key in self.ds:
             self.ds[key] = self.ds[key].rename_column(column_mapping[self.dataset_name], 'text')
+            # CHANGE: in SQuAD the context is one string, while in FiQA it is a list of
+            # passages. Wrap the SQuAD context in a list so both datasets have the same
+            # shape. Before, __assign_ids looped over the string letter by letter and
+            # every character became a separate document.
+            if self.dataset_name == 'squad':
+                self.ds[key] = self.ds[key].map(lambda row: {'text': [row['text']]})
         return self.ds
 
     def __assign_ids(self):
         q_id_counter = 0
         doc_id_counter = 0
         relevant_document_ids = {}
+        # CHANGE: identical texts get the same id. In SQuAD about 5 questions share each
+        # paragraph, and in FiQA some answers belong to several questions. Before, each
+        # copy got its own id, so retrieving the "other" copy counted as a wrong answer.
+        text_to_id = {}
 
         for key in self.ds:
             query_ids = []
             document_ids = []
+            texts = self.ds[key]['text']      # read the column once (much faster than per row)
             for i in range(len(self.ds[key])):
                 query_ids.append(f'q{q_id_counter}')
-                documents = self.ds[key]['text'][i]
+                documents = texts[i]
                 relevant_ids = []
                 for doc in documents:
-                    relevant_ids.append(f'doc{doc_id_counter}')
-                    doc_id_counter += 1
+                    if doc not in text_to_id:
+                        text_to_id[doc] = f'doc{doc_id_counter}'
+                        doc_id_counter += 1
+                    relevant_ids.append(text_to_id[doc])
                 
                 document_ids.append(relevant_ids)
                 

@@ -3,4 +3,7 @@ transformers
 torch
 datasets
 scipy
+nltk
+matplotlib
+pytest
 .
