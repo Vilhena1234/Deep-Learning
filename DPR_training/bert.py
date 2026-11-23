@@ -1,8 +1,10 @@
 import torch
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, get_linear_schedule_with_warmup
 import json
 from pathlib import Path
 import torch.nn.functional as F 
+import random
+import time
 
 """
 question: question
@@ -17,6 +19,7 @@ corpus[passage ID]   passage text
 qrels[question ID]    relevant passage IDs and scores
 """
 #data gathering
+
 def load_ds():
     project_folder = Path(__file__).resolve().parent.parent
     dataset_path = project_folder/"data"/"processed"/"squad_train.json"
@@ -25,11 +28,10 @@ def load_ds():
         dataset = json.load(file)
     #question ids
     
-    return dataset,question_ids
-
-
+    return dataset
 
 def create_batch(dataset,question_ids):
+
     #question text gathering
     questions =[
         dataset["queries"][question_id]
@@ -56,6 +58,44 @@ def create_batch(dataset,question_ids):
     
     return questions, passages, passage_ids
     #data gathering end
+#splitting ds to by passage for train and validation
+def splitter(dataset, validation_percent=0.1, seed = 37):
+    tv_groups = {}
+    for question_id, relevance_num in dataset["qrels"].items():
+        positive_ids = [
+            passage_id
+            for passage_id, relevance in relevance_num.items()
+            if relevance>0
+        ]
+        if len(positive_ids) !=1:
+            raise ValueError("1 pos passage expected")
+        
+        passage_id = positive_ids[0]
+        if passage_id not in tv_groups:
+            tv_groups[passage_id] = []
+
+        tv_groups[passage_id].append(question_id)
+        #exclude already trained
+    trained_already = {"train_d0", "train_d1", "train_d2", "train_d3"}
+    untrained_pass = [
+        passage_id
+        for passage_id in tv_groups
+        if passage_id not in trained_already
+    ]
+
+    random.Random(seed).shuffle(untrained_pass)
+    validation_10 = round(len(tv_groups)*validation_percent)
+    validation_set = set(untrained_pass[:validation_10])
+
+    train_ids = []
+    valid_ids = []
+    for passage_id, question_id in tv_groups.items():
+        if passage_id in validation_set:
+            valid_ids.extend(question_id)
+        else:
+            train_ids.extend(question_id)
+    
+    return valid_ids, train_ids
 #encoder
 def encoder(texts, tokenizer, model):
     inputs = tokenizer(
@@ -65,7 +105,9 @@ def encoder(texts, tokenizer, model):
         max_length= 384,
         return_tensors="pt"
         )
-    
+    device = next(model.parameters()).device
+    inputs = inputs.to(device)
+
     outputs = model(**inputs)
     token_vectors=outputs.last_hidden_state
     mask = inputs["attention_mask"].unsqueeze(-1)
@@ -128,6 +170,7 @@ def train_step(questions,passages,targets,tokenizer,model,optimizer):
     q_vecs = encoder(questions,tokenizer,model)
     pass_vecs = encoder(passages,tokenizer,model)
     scores = q_vecs @ pass_vecs.T
+    
     loss = F.cross_entropy(scores,targets)
 
     if not torch.isfinite(loss).item():
@@ -146,62 +189,97 @@ def train_step(questions,passages,targets,tokenizer,model,optimizer):
     if checked_params == 0:
         raise RuntimeError("no param grad calculated")
 
-    print("all grad are good. params checked:", checked_params)
+    #print("all grad are good. params checked:", checked_params)
 
 
     optimizer.step()
+    return loss.item()
     #evaluate
 def main():
-    dataset =load_ds()
-    question_ids = list(dataset["qrels"])[:20]
-    questions, passages, passage_ids = create_batch(dataset,question_ids)
-
-    """
-    print("questions:", len(questions))
-    print("passages:",len(passages))
-    """
-    save_dir = (
-            Path(__file__).resolve().parent.parent
-            /"DPR_training"
+    source_model = "answerdotai/ModernBERT-large"
+    output_dir = (
+            Path(__file__).resolve().parent
             /"checkpoints"
-            /"modernbert_squad_5step"
-        )
-    model_id = "answerdotai/ModernBERT-large"
-    tokenizer = AutoTokenizer.from_pretrained(save_dir)
-    model = AutoModel.from_pretrained(save_dir)
+            /"modernbert_squad_run1"
+            )
+       
+    tokenizer = AutoTokenizer.from_pretrained(source_model)
+    model = AutoModel.from_pretrained(source_model)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(device)
+    print("Device used:",device)
+    
     model.eval()
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-5)
 
-    targets = build_targets(
-        question_ids,
-        passage_ids,
-        dataset["qrels"],
-        device=next(model.parameters()).device,
-    )
-    b4_loss, b4_correct = eval(
-        questions, passages, targets, tokenizer, model
-    )
+    dataset =load_ds()
+    valid_ids, train_ids = splitter(dataset)
+    batch_size = 16
     
-    step_num = 5
-    total = len(questions)
-    for step in range(1, step_num+1):
-        train_step(
-            questions,passages,targets,tokenizer,model,optimizer
-        )
-        after_loss, after_correct = eval(
-            questions, passages, targets, tokenizer, model
-        )
-        print(
-            f"Step {step}: loss={after_loss:.4f}, "
-            f"correct={after_correct}/{total}"
-        )
+    num_epoch = 1
+    train_limit = 1600
+    train_copy = train_ids.copy()
+    random.Random(37).shuffle(train_copy)
+    if train_limit is not None:
+        train_copy = train_copy[:train_limit]
+
+    steps_in_epoch = len(train_copy) // batch_size
+    total_steps = steps_in_epoch * num_epoch
+
+    #LR scheduler
+
+    scheduler  = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps= int(0.1 * total_steps),
+        num_training_steps=total_steps,
+    ) 
+
+    print("questions:", len(train_copy), "steps/epoch:", steps_in_epoch, "total:", total_steps)
+    skipped = 0
+    step = 0
+    start_time = time.time()
+    for epoch in range(1, num_epoch + 1):
+        random.Random(37).shuffle(train_copy)
+        for start in range(0, steps_in_epoch * batch_size, batch_size):
+            batch_ids = train_copy[start:start + batch_size]
+
+            questions, passages, passage_ids = create_batch(
+                dataset, batch_ids
+            )
+            #when noting to compare to
+            if len(passages) < 2:
+                skipped+=1
+                continue
+
+            targets = build_targets(
+                    batch_ids,
+                    passage_ids,
+                    dataset["qrels"],
+                    device=next(model.parameters()).device,
+                )
+            
+            lr_now = scheduler.get_last_lr()[0]
+
+            train_loss = train_step(
+                questions,passages,targets,tokenizer,model,optimizer
+            )
+            scheduler.step()
+            step +=1
+            print(f"epoch {epoch} Step {step}: training loss={train_loss:.6f}, lr={lr_now:.2e}")
+            
+        """
+        print("questions:", len(questions))
+        print("passages:",len(passages))
+        """
+        elapsed = time.time() - start_time
+        print("total training time:", elapsed)
         
-    print("Total loss decrease:", b4_loss - after_loss)
-    print("Additional correct:", after_correct - b4_correct)
+        epoch_save = output_dir / f"epoch_{epoch}"
+        model.save_pretrained(epoch_save)
+        tokenizer.save_pretrained(epoch_save)
+        print(f"Saved epoch {epoch} to {epoch_save}   (skipped batches so far: {skipped})")
     
-    model.save_pretrained(save_dir)
-    tokenizer.save_pretrained(save_dir)
-    print("Model saved:", save_dir)
+    
     """
     print("Question vectors:", question_vectors.shape)
     print("Passage vectors:", passage_vectors.shape)"""
