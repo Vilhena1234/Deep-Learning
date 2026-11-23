@@ -274,6 +274,12 @@ def main():
         elapsed = time.time() - start_time
         print("total training time:", elapsed)
         
+        if step > 0:
+            print("time/step:", elapsed / step)
+        if device == "cuda":
+            print("peak GPU memory:", torch.cuda.max_memory_allocated() / 1e9, "GB")
+
+        
         epoch_save = output_dir / f"epoch_{epoch}"
         model.save_pretrained(epoch_save)
         tokenizer.save_pretrained(epoch_save)
