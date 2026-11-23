@@ -1,0 +1,6 @@
+pooling_type: 'cls' # mean | cls | max
+emb_dim: 128
+hidden_dim: 32
+n_heads: 4
+n_layers: 6
+feed_forward_dim: 768
