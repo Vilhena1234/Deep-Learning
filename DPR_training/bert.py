@@ -200,7 +200,7 @@ def main():
     output_dir = (
             Path(__file__).resolve().parent
             /"checkpoints"
-            /"modernbert_squad_run1"
+            /"modernbert_squad_full1"
             )
        
     tokenizer = AutoTokenizer.from_pretrained(source_model)
@@ -217,7 +217,7 @@ def main():
     batch_size = 16
     
     num_epoch = 1
-    train_limit = 1600
+    train_limit = None
     train_copy = train_ids.copy()
     random.Random(37).shuffle(train_copy)
     if train_limit is not None:
@@ -273,7 +273,7 @@ def main():
         """
         elapsed = time.time() - start_time
         print("total training time:", elapsed)
-        
+
         if step > 0:
             print("time/step:", elapsed / step)
         if device == "cuda":
