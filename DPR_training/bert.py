@@ -200,7 +200,7 @@ def main():
     output_dir = (
             Path(__file__).resolve().parent
             /"checkpoints"
-            /"modernbert_squad_full1"
+            /"modernbert_squad_full3"
             )
        
     tokenizer = AutoTokenizer.from_pretrained(source_model)
@@ -216,7 +216,7 @@ def main():
     valid_ids, train_ids = splitter(dataset)
     batch_size = 16
     
-    num_epoch = 1
+    num_epoch = 3
     train_limit = None
     train_copy = train_ids.copy()
     random.Random(37).shuffle(train_copy)
