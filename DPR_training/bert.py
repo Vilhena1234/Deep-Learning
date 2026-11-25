@@ -1,10 +1,16 @@
 import torch
-from transformers import AutoTokenizer, AutoModel, get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup
 import json
 from pathlib import Path
 import torch.nn.functional as F 
 import random
 import time
+import sys
+ROOT = Path(__file__).resolve().parent.parent
+
+sys.path.insert(0, str(ROOT))
+from src.retrievers.models.dpr_encoder import load_encoder, save_encoder
+
 
 """
 question: question
@@ -108,13 +114,7 @@ def encoder(texts, tokenizer, model):
     device = next(model.parameters()).device
     inputs = inputs.to(device)
 
-    outputs = model(**inputs)
-    token_vectors=outputs.last_hidden_state
-    mask = inputs["attention_mask"].unsqueeze(-1)
-    mask = mask.to(token_vectors.dtype)
-    vector_sum = (token_vectors*mask).sum(dim=1)
-    token_count = mask.sum(dim=1).clamp_min(1)
-    text_vectors = vector_sum / token_count
+    text_vectors = model(inputs["input_ids"], inputs["attention_mask"])
 
 
     return text_vectors
@@ -196,15 +196,18 @@ def train_step(questions,passages,targets,tokenizer,model,optimizer):
     return loss.item()
     #evaluate
 def main():
-    source_model = "answerdotai/ModernBERT-large"
+    torch.manual_seed(37)
+    source_model = "own:bert-base-uncased"
+    pooling_type = "mean"
+
     output_dir = (
             Path(__file__).resolve().parent
             /"checkpoints"
-            /"modernbert_squad_full1_bs8"
+            /"own_bert_mean_bs16"
             )
        
-    tokenizer = AutoTokenizer.from_pretrained(source_model)
-    model = AutoModel.from_pretrained(source_model)
+    model, tokenizer = load_encoder(source_model, pooling_type)
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
     print("Device used:",device)
@@ -214,7 +217,7 @@ def main():
 
     dataset =load_ds()
     valid_ids, train_ids = splitter(dataset)
-    batch_size = 8
+    batch_size = 16
     
     num_epoch = 1
     train_limit = None
@@ -281,8 +284,8 @@ def main():
 
         
         epoch_save = output_dir / f"epoch_{epoch}"
-        model.save_pretrained(epoch_save)
-        tokenizer.save_pretrained(epoch_save)
+        save_encoder(model, tokenizer, epoch_save)
+
         print(f"Saved epoch {epoch} to {epoch_save}   (skipped batches so far: {skipped})")
     
     
