@@ -3,7 +3,8 @@ import json
 from pathlib import Path
 import random
 import torch
-from transformers import AutoTokenizer, AutoModel
+from bert import load_ds, splitter, create_batch, build_targets, encoder
+from src.retrievers.models.dpr_encoder import load_encoder
 from bert import load_ds, splitter, create_batch, build_targets, encoder
 
 
@@ -49,6 +50,12 @@ def main():
     if use_dev:
         sys.argv.remove("--dev")
 
+    pooling_type = "cls" if "--cls" in sys.argv else "mean"
+    if "--cls" in sys.argv:
+        sys.argv.remove("--cls")
+
+
+
     source = sys.argv[1]
     limit = int(sys.argv[2]) if len(sys.argv) > 2 else None
 
@@ -66,8 +73,8 @@ def main():
     if limit is not None:
         valid_ids = valid_ids[:limit]
 
-    tokenizer = AutoTokenizer.from_pretrained(source)
-    model = AutoModel.from_pretrained(source)
+    model, tokenizer = load_encoder(source, pooling_type)
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
     print(source, evaluate_retrieval(dataset, valid_ids, tokenizer, model))
