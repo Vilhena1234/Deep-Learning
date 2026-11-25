@@ -1,4 +1,6 @@
 import sys
+import json 
+from pathlib import Path
 import random
 import torch
 from transformers import AutoTokenizer, AutoModel
@@ -19,7 +21,7 @@ def encode_all(texts, tokenizer, model, batch_size=32):
     return vecs
 
 
-def evaluate_retrieval(dataset, question_ids, tokenizer, model, batch_size=32, ks=(1, 5, 20)):
+def evaluate_retrieval(dataset, question_ids, tokenizer, model, batch_size=32, ks=(1, 5, 10, 100)):
     was_training = model.training
     model.eval()
     questions, passages, passage_ids = create_batch(dataset, question_ids)
@@ -33,6 +35,7 @@ def evaluate_retrieval(dataset, question_ids, tokenizer, model, batch_size=32, k
     ranks = (scores > gold).sum(dim=1) + 1                 
 
     metrics = {f"recall@{k}": (ranks <= k).float().mean().item() for k in ks}
+    metrics.update({f"precision@{k}": metrics[f"recall@{k}"] / k for k in ks})
     metrics["mrr"] = (1.0 / ranks.float()).mean().item()
     metrics["questions"] = len(question_ids)
     metrics["candidates"] = len(passage_ids)
@@ -42,11 +45,22 @@ def evaluate_retrieval(dataset, question_ids, tokenizer, model, batch_size=32, k
 
 def main():
     source = sys.argv[1]
+    use_dev = "--dev" in sys.argv
+    if use_dev:
+        sys.argv.remove("--dev")
+
+    source = sys.argv[1]
     limit = int(sys.argv[2]) if len(sys.argv) > 2 else None
-    dataset = load_ds()
-    
-    valid_ids, _ = splitter(dataset)
-    valid_ids = valid_ids.copy()
+
+    if use_dev:
+        dev_path = Path(__file__).resolve().parent.parent / "data" / "processed" / "squad_dev.json"
+        with dev_path.open(encoding="utf-8") as file:
+            dataset = json.load(file)
+        valid_ids = list(dataset["qrels"])
+    else:
+        dataset = load_ds()
+        valid_ids, _ = splitter(dataset)
+        valid_ids = valid_ids.copy()
     random.Random(37).shuffle(valid_ids)
 
     if limit is not None:
