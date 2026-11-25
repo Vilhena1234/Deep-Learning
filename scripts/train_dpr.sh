@@ -1,12 +1,12 @@
 #!/bin/bash
-#BSUB -J dpr_epoch3
+#BSUB -J dpr_bs8
 #BSUB -q gpuv100
 #BSUB -gpu "num=1:mode=exclusive_process"
 #BSUB -n 4
 #BSUB -R "span[hosts=1]"
 #BSUB -R "rusage[mem=8GB]"
 #BSUB -R "select[gpu32gb]"
-#BSUB -W 07:00
+#BSUB -W 03:30
 #BSUB -o logs/dpr_%J.out
 #BSUB -e logs/dpr_%J.err
 
