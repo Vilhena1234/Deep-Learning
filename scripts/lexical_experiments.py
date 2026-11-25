@@ -1,23 +1,4 @@
-"""
-Lexical baseline experiments (Person 2 - Soni). Produces the tables and the plot in results/lexical/.
 
-Run from the repo root (the data is downloaded by the starter's Corpus the first time):
-    python scripts/lexical_experiments.py --dataset squad
-    python scripts/lexical_experiments.py --dataset fiqa
-
-What it runs (plan section 7, owner 2):
-    1. Grid search over k1 and b for BM25 on the TUNING split           -> bm25_grid_<dataset>.csv + .png
-    2. TF-IDF vs BM25 (default) vs BM25 (tuned) vs BM25 with b = 0       -> main_<dataset>.csv
-       on the REPORT split
-    3. Preprocessing ablation: stopwords / stemming on and off           -> preprocessing_<dataset>.csv
-
-Splits (never tune on the numbers we report), corpus = Corpus.all_documents as in main.py:
-    FiQA : tune on validation, report on test
-    SQuAD: tune on 2,000 train questions, report on validation (SQuAD has no test split)
-
-The metrics below are a small local copy so this script runs on its own.
-Once src/evaluation/metrics.py (Person 1) has Precision@k, Recall@k and MRR, switch to that.
-"""
 
 import argparse
 import csv
