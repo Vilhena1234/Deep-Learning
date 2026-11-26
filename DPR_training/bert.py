@@ -222,7 +222,7 @@ def main():
     valid_ids, train_ids = splitter(dataset)
     batch_size = 16
     
-    num_epoch = 1
+    num_epoch = 3
     train_limit = None
     train_copy = train_ids.copy()
     random.Random(37).shuffle(train_copy)

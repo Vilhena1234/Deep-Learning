@@ -16,16 +16,17 @@ def evaluate(retriever, queries, qrels):
     documents = retriever.index.GetDocuments()
     question_ids = list(queries)
     results = retriever.TopK([queries[q] for q in question_ids], k=max(KS))
-    totals = {f"P@{k}": 0.0 for k in KS} | {f"R@{k}": 0.0 for k in KS} | {"MRR": 0.0}
+    totals = {f"precision@{k}": 0.0 for k in KS} | {f"recall@{k}": 0.0 for k in KS} | {"mrr": 0.0}
+  
     for q, ranked in zip(question_ids, results):
         relevant = {d for d, value in qrels[q].items() if value > 0}
         hits = [documents[j].GetId() in relevant for j, _ in ranked]
         for k in KS:
-            totals[f"P@{k}"] += sum(hits[:k]) / k
-            totals[f"R@{k}"] += sum(hits[:k]) / len(relevant)
+            totals[f"precision@{k}"] += sum(hits[:k]) / k
+            totals[f"recall@{k}"] += sum(hits[:k]) / len(relevant)
         if True in hits:
-            totals["MRR"] += 1 / (hits.index(True) + 1)
-    return {name: round(value / len(question_ids), 4) for name, value in totals.items()}
+            totals["mrr"] += 1 / (hits.index(True) + 1)
+    return {name: value / len(question_ids) for name, value in totals.items()}
 
 
 def main():
@@ -48,7 +49,8 @@ def main():
     documents = [{"text": list(corpus.values()), "document_id": list(corpus.keys())}]
     retriever = DenseRetriever(documents, args.model, vectors_path=ROOT / "index" / f"{args.name}.pt")
 
-    row = {"method": args.name, "questions": len(queries), "passages": len(corpus)}
+    row = {"dataset": "squad", "model": args.name, "split": "val", "n_queries": len(queries)}
+
     row |= evaluate(retriever, queries, dataset["qrels"])
     print(row)
 
