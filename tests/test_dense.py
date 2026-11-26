@@ -10,9 +10,10 @@ DOCUMENTS = [{"text": ["p1", "p2", "p3"], "document_id": ["d1", "d2", "d3"]}]
 
 class ToyRetriever(DenseRetriever):
     """uses hand-made vectors instead of a real model."""
-    def __init__(self, documents, model_path="toy"):
+    def __init__(self, documents, model_path="toy", pooling_type="mean"):
         Retriever.__init__(self, documents)
         self.model_path = model_path
+        self.pooling_type = pooling_type
         self.device = "cpu"
         self.doc_vectors = self.Encode([d.GetText() for d in self.index.GetDocuments()])
 
@@ -50,3 +51,5 @@ def test_load_rejects_wrong_files(tmp_path):
         ToyRetriever(other).LoadVectors(path)
     with pytest.raises(ValueError):
         ToyRetriever(DOCUMENTS, model_path="another").LoadVectors(path)
+    with pytest.raises(ValueError):
+        ToyRetriever(DOCUMENTS, pooling_type="cls").LoadVectors(path)

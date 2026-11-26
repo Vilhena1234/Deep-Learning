@@ -1,21 +1,21 @@
 from pathlib import Path
 import torch
-from transformers import AutoModel, AutoTokenizer
+
 
 from src.retrievers.base_retriever import Retriever
-from src.retrievers.models.pooling import mean_pooling
-
+from src.retrievers.models.dpr_encoder import load_encoder
 
 class DenseRetriever(Retriever):
-    def __init__(self, documents, model_path, batch_size=32, max_length=384, vectors_path=None):
+    def __init__(self, documents, model_path, batch_size=32, max_length=384, vectors_path=None,
+                 pooling_type="mean"):
         super().__init__(documents)
         self.model_path = str(model_path)
         self.batch_size = batch_size
         self.max_length = max_length
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        self.model = AutoModel.from_pretrained(model_path).to(self.device)
-        self.model.eval()
+        self.model, self.tokenizer = load_encoder(model_path, pooling_type)
+        self.model.to(self.device)
+        self.pooling_type = self.model.pooling_type
 
         if vectors_path is not None and Path(vectors_path).exists():
             self.LoadVectors(vectors_path)
@@ -31,7 +31,8 @@ class DenseRetriever(Retriever):
     def SaveVectors(self, path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         torch.save({"ids": self.DocumentIds(), "model_path": self.model_path,
-                    "vectors": self.doc_vectors.cpu()}, path)
+                    "pooling_type": self.pooling_type, "vectors": self.doc_vectors.cpu()}, path)
+
 
     def LoadVectors(self, path):
         saved = torch.load(path, map_location=self.device, weights_only=True)
@@ -40,7 +41,9 @@ class DenseRetriever(Retriever):
         if saved["model_path"] != self.model_path:
             raise ValueError("saved vectors were made by a different model")
         self.doc_vectors = saved["vectors"]
-
+        if saved.get("pooling_type", "mean") != self.pooling_type:
+            raise ValueError("saved vectors were made with different pooling")
+        self.doc_vectors = saved["vectors"]
 
     @torch.no_grad()
     def Encode(self, texts):
@@ -50,8 +53,8 @@ class DenseRetriever(Retriever):
             batch = [texts[i] for i in order[start:start + self.batch_size]]
             inputs = self.tokenizer(batch, padding=True, truncation=True,
                                     max_length=self.max_length, return_tensors="pt").to(self.device)
-            tokens = self.model(**inputs).last_hidden_state
-            chunks.append(mean_pooling(tokens, inputs["attention_mask"]))
+            chunks.append(self.model(inputs["input_ids"], inputs["attention_mask"]))
+
         sorted_vectors = torch.cat(chunks)
         vectors = torch.empty_like(sorted_vectors)
         vectors[order] = sorted_vectors
