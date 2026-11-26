@@ -206,7 +206,7 @@ def main():
     output_dir = (
             Path(__file__).resolve().parent
             /"checkpoints"
-            /"own_bert_mean_bs16"
+            /run_name
             )
        
     model, tokenizer = load_encoder(source_model, pooling_type)
