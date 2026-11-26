@@ -197,8 +197,11 @@ def train_step(questions,passages,targets,tokenizer,model,optimizer):
     #evaluate
 def main():
     torch.manual_seed(37)
-    source_model = "own:bert-base-uncased"
-    pooling_type = "mean"
+    source_model = sys.argv[1] if len(sys.argv) > 1 else "own:bert-base-uncased"
+    pooling_type = sys.argv[2] if len(sys.argv) > 2 else "mean"
+    run_name = sys.argv[3] if len(sys.argv) > 3 else "own_bert_mean_bs16"
+    print("model:", source_model, "pooling:", pooling_type, "run:", run_name)
+
 
     output_dir = (
             Path(__file__).resolve().parent
