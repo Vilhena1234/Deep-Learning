@@ -40,13 +40,17 @@ def main(cfg):
     tfidf_test_relevancies = retrieveQueryAndGetRelevancies(tf_idf, test_queries, k=cfg.top_k)
 
     ### Evaluate
-    train_scores = Evaluate(tfidf_train_relevancies, train_queries)
-    val_scores = Evaluate(tfidf_val_relevancies, val_queries)
-    test_scores = Evaluate(tfidf_test_relevancies, test_queries)
+    
+    k_values = [1, 5, 10, 100]
+    train_scores = Evaluate(tfidf_train_relevancies, train_queries, k_values=k_values)
+    val_scores = Evaluate(tfidf_val_relevancies, val_queries, k_values=k_values)
+    test_scores = Evaluate(tfidf_test_relevancies, test_queries, k_values=k_values)
 
     print(f'Train results: {train_scores}')
     print(f'Val results: {val_scores}')
     print(f'Test results: {test_scores}')
+
+    
 
 if __name__ == '__main__':
     main()

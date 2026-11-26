@@ -247,3 +247,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Project datasets and experiment files
+data/raw/
+data/processed/
+
+# Model checkpoints and indexes
+checkpoints/
+indexes/
+
+# Experiment logs
+logs/
