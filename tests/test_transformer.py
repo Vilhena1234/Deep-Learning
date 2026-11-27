@@ -1,9 +1,3 @@
-"""
-Tests for transformer.py and pooling.py.
-Every component is checked against PyTorch's own implementation.
-Run from the project folder with:  python -m pytest tests -v
-"""
-
 import os
 import sys
 
@@ -23,15 +17,13 @@ TOL = 1e-5
 
 
 def padding_mask(B=2, T=6):
-    """Second sentence has its last 2 tokens as padding."""
+    
     mask = torch.ones(B, T, dtype=torch.bool)
     mask[1, -2:] = False
     return mask
 
 
-# --------------------------------------------------------------------------- #
-# 1. Attention
-# --------------------------------------------------------------------------- #
+
 def test_attention_matches_pytorch():
     q, k, v = (torch.randn(2, 3, 5, 8) for _ in range(3))     # (B, h, T, d_k)
     ours, _ = attention(q, k, v)
@@ -49,11 +41,9 @@ def test_attention_with_mask_matches_pytorch_and_ignores_padding():
     assert torch.all(w[1, :, :, -2:] == 0)                            # no weight on padding
 
 
-# --------------------------------------------------------------------------- #
-# 2. Multi-head attention
-# --------------------------------------------------------------------------- #
+
 def copy_mha(ours: MultiHeadedAttention, ref: nn.MultiheadAttention):
-    """Give our module exactly the same weights as PyTorch's."""
+
     d = ref.embed_dim
     with torch.no_grad():
         for i in range(3):                                    # q, k, v stacked in in_proj
@@ -71,7 +61,7 @@ def test_multihead_matches_pytorch():
     copy_mha(ours, ref)
 
     out = ours(x, x, x, mask)
-    # PyTorch's key_padding_mask uses the opposite convention: True = ignore
+   
     ref_out, ref_w = ref(x, x, x, key_padding_mask=~mask, average_attn_weights=False)
     assert ours.attn.shape == (B, h, T, T)
     assert torch.allclose(out[0], ref_out[0], atol=TOL)
@@ -80,7 +70,7 @@ def test_multihead_matches_pytorch():
 
 
 def test_padding_does_not_change_real_tokens():
-    """Same sentence with and without extra padding must give the same output."""
+ 
     d, h = 16, 4
     mha = MultiHeadedAttention(h, d).eval()
     x = torch.randn(1, 4, d)
@@ -89,9 +79,7 @@ def test_padding_does_not_change_real_tokens():
     assert torch.allclose(mha(x, x, x), mha(x_pad, x_pad, x_pad, mask)[:, :4], atol=TOL)
 
 
-# --------------------------------------------------------------------------- #
-# 3. Layer norm, residual, feed-forward
-# --------------------------------------------------------------------------- #
+
 def test_layernorm_matches_pytorch():
     x = torch.randn(2, 6, 16) * 3 + 5
     ours, ref = LayerNorm(16, eps=1e-5), nn.LayerNorm(16, eps=1e-5)
@@ -108,7 +96,7 @@ def test_layernorm_gives_mean_0_variance_1_per_token():
 
 
 def test_layernorm_does_not_depend_on_other_sentences():
-    """Unlike batch norm, a sentence's output does not change with the batch."""
+
     ln = LayerNorm(16)
     a = torch.randn(1, 6, 16)
     batch = torch.cat([a, torch.randn(3, 6, 16) * 100])
@@ -116,7 +104,7 @@ def test_layernorm_does_not_depend_on_other_sentences():
 
 
 def test_residual_gradient_has_identity_path():
-    """Week 3 slide 21: d(x + f(x))/dx = I + df/dx. With f = 0, the gradient is exactly I."""
+
     x = torch.randn(3, 16, requires_grad=True)
     out = x + 0 * nn.Linear(16, 16)(x)
     out.sum().backward()
@@ -131,9 +119,7 @@ def test_feedforward_acts_on_each_token_separately():
         assert torch.allclose(full[:, t], ffn(x[:, t:t + 1])[:, 0], atol=TOL)
 
 
-# --------------------------------------------------------------------------- #
-# 4. Full encoder layer
-# --------------------------------------------------------------------------- #
+
 def copy_layer(ours: EncoderLayer, ref: nn.TransformerEncoderLayer):
     copy_mha(ours.self_attn, ref.self_attn)
     with torch.no_grad():
@@ -157,11 +143,9 @@ def test_encoder_layer_matches_pytorch():
     assert torch.allclose(out[1, :-2], ref_out[1, :-2], atol=1e-4)
 
 
-# --------------------------------------------------------------------------- #
-# 5. Positions: why they are needed (Week 8 idea: permutation equivariance)
-# --------------------------------------------------------------------------- #
+
 def test_without_positions_word_order_is_ignored():
-    """Shuffling the tokens only shuffles the outputs: the model cannot see order."""
+
     enc = TransformerEncoder(100, d_model=32, N=2, h=4, d_ff=64, dropout=0.0, positions="none").eval()
     ids = torch.tensor([[5, 17, 42, 8, 99]])
     perm = torch.tensor([3, 0, 4, 1, 2])
@@ -189,10 +173,6 @@ def test_encoder_shapes_and_attention_maps():
     assert out.shape == (2, 7, 32)
     assert len(maps) == 3 and maps[0].shape == (2, 4, 7, 7)
 
-
-# --------------------------------------------------------------------------- #
-# 6. Pooling
-# --------------------------------------------------------------------------- #
 def test_cls_pooling_takes_first_token():
     h = torch.randn(2, 6, 16)
     assert torch.equal(cls_pooling(h), h[:, 0])

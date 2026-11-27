@@ -1,9 +1,3 @@
-"""
-Check with the REAL pretrained BERT that our encoder gives the same output.
-Downloads bert-base-uncased (~440 MB) the first time.
-
-Run from the repo root:  python scripts/check_bert.py
-"""
 
 import os
 import sys
