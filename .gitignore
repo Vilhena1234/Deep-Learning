@@ -1,4 +1,30 @@
+
+# Datasets (each person generates them with: python data.py)
+data/
+
+# Notes and theory
+notes/
+theory/
+
+# Model checkpoints, vector indexes and large outputs
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.faiss
+*.npy
+wandb/
+runs/
+
+# HPC job logs
+*.out
+*.err
+
+# Python
+
 # Byte-compiled / optimized / DLL files
+
 __pycache__/
 *.py[codz]
 *$py.class
