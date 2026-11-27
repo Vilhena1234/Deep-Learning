@@ -144,32 +144,76 @@ def prepare_squad() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Alternative: download through the HuggingFace `datasets` library
-#   pip install datasets
-#   python data.py --source hf
+# FiQA course corpus (same source and ID construction as the course code)
 # --------------------------------------------------------------------------- #
 _HF_SPLIT_NAMES = {"validation": "dev", "dev": "dev", "train": "train", "test": "test"}
+_FIQA_MAIN_SPLITS = (("train", "train"), ("validation", "dev"), ("test", "test"))
+
+
+def _build_fiqa_main_corpus(dataset):
+    """Build the course FiQA corpus from every row's ``ground_truths``.
+
+    This intentionally mirrors ``src/data_utils/corpus.py`` in the course
+    repository: every ground-truth passage becomes its own document, and IDs
+    are assigned sequentially across train, validation, then test.  The same
+    complete corpus is paired with each split's queries and qrels.
+    """
+    corpus = {}
+    split_data = {}
+    query_counter = 0
+    document_counter = 0
+
+    for source_split, output_split in _FIQA_MAIN_SPLITS:
+        if source_split not in dataset:
+            raise ValueError(
+                f"FiQA main configuration is missing the '{source_split}' split."
+            )
+
+        queries = {}
+        qrels = {}
+        rows = dataset[source_split]
+
+        for row in rows:
+            query_id = f"q{query_counter}"
+            query_counter += 1
+            queries[query_id] = row["question"]
+
+            relevant_document_ids = []
+            ground_truths = row["ground_truths"] or []
+            if isinstance(ground_truths, str):
+                ground_truths = [ground_truths]
+
+            for passage in ground_truths:
+                document_id = f"doc{document_counter}"
+                document_counter += 1
+                corpus[document_id] = str(passage)
+                relevant_document_ids.append(document_id)
+
+            qrels[query_id] = {document_id: 1 for document_id in relevant_document_ids}
+
+        split_data[output_split] = {"queries": queries, "qrels": qrels}
+
+    return corpus, split_data
 
 
 def prepare_fiqa_hf() -> None:
+    """Prepare FiQA using the course repository's ``main`` configuration.
+
+    The course corpus is constructed from the ``ground_truths`` passages in
+    ``vibrantlabsai/fiqa`` rather than from the separate 57,638-document BEIR
+    ``corpus`` configuration.  Keeping the generated IDs identical to the
+    course ``Corpus`` class makes the qrels directly comparable.
+    """
     from datasets import load_dataset
-    print("FiQA (HuggingFace)")
 
-    corpus_ds = load_dataset("BeIR/fiqa", "corpus")["corpus"]
-    corpus = {str(d["_id"]): ((d.get("title") or "") + " " + d["text"]).strip() for d in corpus_ds}
+    print("FiQA (course main subset)")
+    dataset = load_dataset("vibrantlabsai/fiqa", "main")
+    corpus, split_data = _build_fiqa_main_corpus(dataset)
 
-    queries_ds = load_dataset("BeIR/fiqa", "queries")["queries"]
-    all_queries = {str(q["_id"]): q["text"] for q in queries_ds}
-
-    qrels_dd = load_dataset("BeIR/fiqa-qrels")  # relevance labels live in a separate repo
-    for hf_split, rows in qrels_dd.items():
-        split = _HF_SPLIT_NAMES.get(hf_split, hf_split)
-        qrels = {}
-        for r in rows:
-            if int(r["score"]) > 0:
-                qrels.setdefault(str(r["query-id"]), {})[str(r["corpus-id"])] = int(r["score"])
-        queries = {qid: all_queries[qid] for qid in qrels if qid in all_queries}
-        _save("fiqa", split, corpus, queries, qrels)
+    print(f"  Total course passages: {len(corpus):,}")
+    for split in ("train", "dev", "test"):
+        split_values = split_data[split]
+        _save("fiqa", split, corpus, split_values["queries"], split_values["qrels"])
 
 
 def prepare_squad_hf() -> None:
@@ -205,7 +249,7 @@ def load(name: str, split: str, subset: int | None = None, n_extra_docs: int = 5
     """
     path = OUT_DIR / f"{name}_{split}.json"
     if not path.exists():
-        raise FileNotFoundError(f"{path} not found - run `python data.py` first.")
+        raise FileNotFoundError(f"{path} not found - run `python data.py --source course` first.")
     with open(path, encoding="utf-8") as f:
         d = json.load(f)
     corpus, queries, qrels = d["corpus"], d["queries"], d["qrels"]
@@ -235,11 +279,18 @@ def stats(name: str, split: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--stats", action="store_true", help="print dataset statistics")
-    parser.add_argument("--source", choices=["direct", "hf"], default="direct",
-                        help="direct = official download links; hf = HuggingFace `datasets` library")
+    parser.add_argument(
+        "--source",
+        choices=["course", "direct"],
+        default="course",
+        help=(
+            "course = course-compatible FiQA main subset (~17k ground-truth passages) "
+            "and HuggingFace SQuAD; direct = full BEIR FiQA corpus and direct SQuAD download"
+        ),
+    )
     args = parser.parse_args()
 
-    if args.source == "hf":
+    if args.source == "course":
         prepare_fiqa_hf()
         prepare_squad_hf()
     else:
