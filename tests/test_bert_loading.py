@@ -1,8 +1,4 @@
-"""
-Test that copying BERT weights into our encoder reproduces HuggingFace's output.
-Uses a small randomly initialised BERT, so it needs no download and runs in seconds.
-(check_bert.py does the same with the real pretrained bert-base-uncased.)
-"""
+
 
 import os
 import sys
@@ -47,6 +43,6 @@ def test_same_attention_maps_as_huggingface_bert():
     with torch.no_grad():
         ref = bert(input_ids=ids, output_attentions=True).attentions
         ours(ids)
-    assert ref is not None and len(ref) == len(ours.attention_maps()) == 3   # really compared
+    assert ref is not None and len(ref) == len(ours.attention_maps()) == 3  
     for ref_map, our_map in zip(ref, ours.attention_maps()):
         assert torch.allclose(our_map, ref_map, atol=1e-5)

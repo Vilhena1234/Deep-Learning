@@ -7,7 +7,7 @@ from src.retrievers.models.transformer import TransformerEncoder
 
 def encoder_from_bert_config(config) -> TransformerEncoder:
 
-    assert config.hidden_act == "gelu", "our feed-forward supports exact GELU (as in BERT)"
+    assert config.hidden_act == "gelu", "our feed-forward supports exact GELU "
     model = TransformerEncoder(
         vocab_size=config.vocab_size,
         d_model=config.hidden_size,               # 768 in bert-base
@@ -19,7 +19,7 @@ def encoder_from_bert_config(config) -> TransformerEncoder:
         positions="learned",                      # BERT learns its position vectors
         activation="gelu",
     )
-    # BERT uses eps = 1e-12 in every LayerNorm (our default too); set it explicitly anyway
+   
     for m in model.modules():
         if hasattr(m, "eps"):
             m.eps = config.layer_norm_eps

@@ -1,7 +1,3 @@
-"""
-Tests for the course's TransformerEncoder (src/retrievers/models/encoder.py)
-and max pooling. Run from the repo root:  python -m pytest tests -v
-"""
 
 import os
 import sys
