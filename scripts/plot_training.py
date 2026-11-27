@@ -61,4 +61,24 @@ ax.set_ylabel("validation MRR")
 ax.set_title("Validation MRR (8,692 questions, 1,889 passages)")
 fig.tight_layout()
 fig.savefig(OUT / "validation_mrr.png", dpi=200)
+STEPS = 4931
+bert_runs = [
+    ("A: own encoder, mean", "dpr_30383528.out", 0, "tab:blue"),
+    ("B: Hugging Face BERT, mean", "dpr_30383528.out", 1, "tab:orange"),
+    ("C: own encoder, CLS", "dpr_30383528.out", 2, "tab:green"),
+]
+fig, ax = plt.subplots(figsize=(8, 4.5))
+for label, name, part, colour in bert_runs:
+    losses = read_losses(name)[part * STEPS:(part + 1) * STEPS]
+    steps = np.arange(WINDOW, len(losses) + 1)
+    ax.plot(steps, smooth(losses), label=label, color=colour, linewidth=1.5)
+ax.axhline(math.log(16), color="grey", linestyle="--", linewidth=1)
+ax.set_yscale("log")
+ax.set_xlabel("training step")
+ax.set_ylabel(f"training loss (mean of {WINDOW} steps)")
+ax.set_title("Training loss, BERT-base encoders (batch 16, 1 epoch)")
+ax.legend()
+fig.tight_layout()
+fig.savefig(OUT / "training_loss_bert.png", dpi=200)
+
 print("saved", sorted(p.name for p in OUT.iterdir()))
